@@ -2,42 +2,76 @@
 <html>
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Dead Frequency 3D - Final Controls</title>
+    <title>Dead Frequency 3D - Pro Mobile</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; touch-action: none; }
-        #ui { position: absolute; top: 10px; width: 100%; text-align: center; color: #444; font-family: monospace; pointer-events: none; z-index: 10; }
-        #joy-base { position: absolute; bottom: 50px; left: 50px; width: 120px; height: 120px; background: rgba(255,255,255,0.05); border: 2px solid #333; border-radius: 50%; touch-action: none; }
-        #joy-knob { position: absolute; top: 35px; left: 35px; width: 50px; height: 50px; background: #555; border-radius: 50%; pointer-events: none; }
+        body { margin: 0; background: #000; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; font-family: monospace; }
+        
+        /* 16:9 Game Container */
+        #game-wrapper {
+            position: relative;
+            width: 100vw;
+            height: 56.25vw; /* 16:9 Ratio */
+            max-height: 100vh;
+            max-width: 177.78vh;
+            background: #050505;
+            box-shadow: 0 0 50px rgba(0,0,0,1);
+            overflow: hidden;
+        }
+
+        #ui-layer { position: absolute; top: 10px; width: 100%; text-align: center; color: #444; pointer-events: none; z-index: 5; font-size: 12px; }
+        
+        /* Modern Joystick */
+        #joy-base { 
+            position: absolute; bottom: 15%; left: 8%; 
+            width: 80px; height: 80px; background: rgba(255,255,255,0.03); 
+            border: 1px solid rgba(255,255,255,0.1); border-radius: 50%; touch-action: none;
+        }
+        #joy-knob { 
+            position: absolute; top: 20px; left: 20px; 
+            width: 40px; height: 40px; background: rgba(255,255,255,0.2); border-radius: 50%; 
+        }
+
+        canvas { width: 100% !important; height: 100% !important; }
     </style>
 </head>
 <body>
 
-    <div id="ui">Diagonal Movement Fixed. Try North-East now!</div>
-    <div id="joy-base"><div id="joy-knob"></div></div>
+    <div id="game-wrapper">
+        <div id="ui-layer">DEAD FREQUENCY | 16:9 ANDROID BUILD</div>
+        <div id="joy-base"><div id="joy-knob"></div></div>
+    </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
 <script>
     let scene, camera, renderer;
     let lon = 0, lat = 0, touchX, touchY;
-    let inputX = 0, inputY = 0;
+    let moveDir = { x: 0, z: 0 };
 
     function init() {
         scene = new THREE.Scene();
         scene.background = new THREE.Color(0x020202);
-        scene.fog = new THREE.Fog(0x000000, 1, 20);
+        scene.fog = new THREE.Fog(0x000000, 1, 15);
 
-        camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera = new THREE.PerspectiveCamera(75, 16/9, 0.1, 1000);
         camera.position.set(0, 1.6, 0);
 
         renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        document.body.appendChild(renderer.domElement);
+        const wrapper = document.getElementById('game-wrapper');
+        renderer.setSize(wrapper.clientWidth, wrapper.clientHeight);
+        wrapper.appendChild(renderer.domElement);
 
-        scene.add(new THREE.GridHelper(200, 100, 0x222222, 0x111111));
-        
-        const light = new THREE.PointLight(0xffffff, 2, 10);
-        camera.add(light);
+        // Ground with more detail
+        const grid = new THREE.GridHelper(100, 40, 0x111111, 0x222222);
+        scene.add(grid);
+
+        // Ambient Horror Light
+        const ambient = new THREE.AmbientLight(0x404040, 0.5);
+        scene.add(ambient);
+
+        // Player Flashlight
+        const torch = new THREE.PointLight(0xffffff, 1, 8);
+        camera.add(torch);
         scene.add(camera);
 
         setupControls();
@@ -47,85 +81,94 @@
     function setupControls() {
         const base = document.getElementById('joy-base');
         const knob = document.getElementById('joy-knob');
-        const centerX = base.offsetLeft + 60;
-        const centerY = base.offsetTop + 60;
+        const wrapper = document.getElementById('game-wrapper');
 
-        // --- LOOK (Right Half) ---
-        document.addEventListener('touchstart', (e) => {
-            if(e.touches[0].clientX > window.innerWidth / 2) {
-                touchX = e.touches[0].clientX;
-                touchY = e.touches[0].clientY;
+        // RIGHT SIDE LOOK
+        wrapper.addEventListener('touchstart', (e) => {
+            const t = e.touches[0];
+            if(t.clientX > window.innerWidth / 2) {
+                touchX = t.clientX; touchY = t.clientY;
             }
         });
 
-        document.addEventListener('touchmove', (e) => {
-            for(let i=0; i<e.touches.length; i++) {
-                if(e.touches[i].clientX > window.innerWidth / 2) {
-                    let dx = e.touches[i].clientX - touchX;
-                    let dy = e.touches[i].clientY - touchY;
-                    lon += dx * 0.25;
-                    lat -= dy * 0.25;
+        wrapper.addEventListener('touchmove', (e) => {
+            for(let i=0; i<e.touches.length; i++){
+                const t = e.touches[i];
+                if(t.clientX > window.innerWidth / 2) {
+                    let dx = t.clientX - touchX;
+                    let dy = t.clientY - touchY;
+                    lon += dx * 0.2;
+                    lat -= dy * 0.2;
                     lat = Math.max(-85, Math.min(85, lat));
-                    touchX = e.touches[i].clientX;
-                    touchY = e.touches[i].clientY;
+                    touchX = t.clientX; touchY = t.clientY;
                 }
             }
         });
 
-        // --- MOVE (Left Half / Joystick) ---
+        // LEFT SIDE JOYSTICK (Proper Vector Math)
         base.addEventListener('touchmove', (e) => {
             e.preventDefault();
-            let t = e.touches[0];
+            const t = e.touches[0];
+            const rect = base.getBoundingClientRect();
+            const centerX = rect.left + rect.width/2;
+            const centerY = rect.top + rect.height/2;
+            
             let dx = t.clientX - centerX;
             let dy = t.clientY - centerY;
-            let dist = Math.min(Math.sqrt(dx*dx + dy*dy), 50);
+            let dist = Math.min(Math.sqrt(dx*dx + dy*dy), 30);
             let angle = Math.atan2(dy, dx);
 
             knob.style.transform = `translate(${Math.cos(angle)*dist}px, ${Math.sin(angle)*dist}px)`;
             
-            // Raw Inputs
-            inputX = Math.cos(angle) * (dist / 50);
-            inputY = Math.sin(angle) * (dist / 50);
+            // Movement intensity
+            moveDir.x = Math.cos(angle) * (dist / 30);
+            moveDir.z = Math.sin(angle) * (dist / 30);
         });
 
         base.addEventListener('touchend', () => {
             knob.style.transform = `translate(0px, 0px)`;
-            inputX = 0; inputY = 0;
+            moveDir = { x: 0, z: 0 };
         });
     }
 
     function animate() {
         requestAnimationFrame(animate);
 
-        lon = lon % 360;
+        // Rotation logic
         let phi = THREE.MathUtils.degToRad(90 - lat);
         let theta = THREE.MathUtils.degToRad(lon);
-        
         const target = new THREE.Vector3();
         target.setFromSphericalCoords(1, phi, theta).add(camera.position);
         camera.lookAt(target);
 
-        if (inputX !== 0 || inputY !== 0) {
-            // Calculate direction vectors
+        // Movement Logic (Fixed Diagonal)
+        if(moveDir.x !== 0 || moveDir.z !== 0) {
             const forward = new THREE.Vector3();
             camera.getWorldDirection(forward);
             forward.y = 0; forward.normalize();
             
             const right = new THREE.Vector3();
-            right.crossVectors(forward, camera.up).negate().normalize(); // Corrected Right Vector
+            right.crossVectors(forward, camera.up).normalize();
 
-            // Combine for Smooth Diagonal Movement
-            const moveVec = new THREE.Vector3();
-            moveVec.addScaledVector(forward, -inputY * 0.1);
-            moveVec.addScaledVector(right, inputX * 0.1);
+            // Ye formula diagonal movement ko smooth karega
+            const velocity = new THREE.Vector3();
+            velocity.addScaledVector(forward, -moveDir.z * 0.08);
+            velocity.addScaledVector(right, moveDir.x * 0.08);
             
-            camera.position.add(moveVec);
+            camera.position.add(velocity);
         }
 
         renderer.render(scene, camera);
     }
 
-    window.onload = init;
+    window.onresize = () => {
+        const wrapper = document.getElementById('game-wrapper');
+        renderer.setSize(wrapper.clientWidth, wrapper.clientHeight);
+        camera.aspect = 16/9;
+        camera.updateProjectionMatrix();
+    };
+
+    init();
 </script>
 </body>
 </html>
