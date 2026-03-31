@@ -2,28 +2,17 @@
 <html>
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Dead Frequency 3D - Fixed Controls</title>
+    <title>Dead Frequency 3D - Controls Fixed</title>
     <style>
         body { margin: 0; overflow: hidden; background: #000; touch-action: none; }
-        #ui { position: absolute; top: 10px; width: 100%; text-align: center; color: #555; font-family: monospace; pointer-events: none; z-index: 10; }
-        
-        /* Joystick Base */
-        #joy-base { 
-            position: absolute; bottom: 50px; left: 50px; 
-            width: 120px; height: 120px; background: rgba(255,255,255,0.1); 
-            border: 1px solid #333; border-radius: 50%; touch-action: none;
-        }
-        /* Joystick Knob (Stick) */
-        #joy-knob { 
-            position: absolute; top: 35px; left: 35px; 
-            width: 50px; height: 50px; background: #666; border-radius: 50%; 
-            transition: 0.1s;
-        }
+        #ui { position: absolute; top: 10px; width: 100%; text-align: center; color: #666; font-family: monospace; pointer-events: none; z-index: 10; }
+        #joy-base { position: absolute; bottom: 50px; left: 50px; width: 120px; height: 120px; background: rgba(255,255,255,0.05); border: 1px solid #333; border-radius: 50%; touch-action: none; }
+        #joy-knob { position: absolute; top: 35px; left: 35px; width: 50px; height: 50px; background: #444; border-radius: 50%; }
     </style>
 </head>
 <body>
 
-    <div id="ui">Controls Fixed. Swipe to Look, Joystick to Move.</div>
+    <div id="ui">Controls Calibrated. Left is Left, Right is Right.</div>
     
     <div id="joy-base">
         <div id="joy-knob"></div>
@@ -48,16 +37,11 @@
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
 
-        // Ground Grid
-        const grid = new THREE.GridHelper(200, 100, 0x333333, 0x111111);
+        const grid = new THREE.GridHelper(200, 100, 0x222222, 0x111111);
         scene.add(grid);
 
-        // Flashlight effect
-        const light = new THREE.SpotLight(0xffffff, 2);
-        light.angle = Math.PI / 4;
+        const light = new THREE.PointLight(0xffffff, 1.5, 15);
         camera.add(light);
-        camera.add(light.target);
-        light.target.position.set(0, 0, -1);
         scene.add(camera);
 
         setupControls();
@@ -68,9 +52,10 @@
         const base = document.getElementById('joy-base');
         const knob = document.getElementById('joy-knob');
         const baseRect = base.getBoundingClientRect();
-        const center = { x: baseRect.left + 60, y: baseRect.top + 60 };
+        const centerX = baseRect.left + 60;
+        const centerY = baseRect.top + 60;
 
-        // --- CAMERA LOOK (Swipe Fix) ---
+        // --- CAMERA LOOK (Rotation Fix) ---
         document.addEventListener('touchstart', (e) => {
             if(e.touches[0].clientX > window.innerWidth / 2) {
                 touchX = e.touches[0].clientX;
@@ -83,9 +68,9 @@
                 let dx = e.touches[0].clientX - touchX;
                 let dy = e.touches[0].clientY - touchY;
                 
-                // FIXED: Direct Swipe (No Inverse)
-                lon += dx * 0.3; 
-                lat -= dy * 0.3; 
+                // Rotation Fixed: Right swipe = Right look
+                lon += dx * 0.2; 
+                lat -= dy * 0.2; 
                 
                 lat = Math.max(-85, Math.min(85, lat));
                 touchX = e.touches[0].clientX;
@@ -93,23 +78,20 @@
             }
         });
 
-        // --- JOYSTICK MOVEMENT ---
+        // --- JOYSTICK MOVEMENT (Direction Fix) ---
         base.addEventListener('touchmove', (e) => {
             e.preventDefault();
             let t = e.touches[0];
-            let distX = t.clientX - center.x;
-            let distY = t.clientY - center.y;
+            let distX = t.clientX - centerX;
+            let distY = t.clientY - centerY;
             let distance = Math.min(Math.sqrt(distX*distX + distY*distY), 50);
             let angle = Math.atan2(distY, distX);
 
-            let moveX = Math.cos(angle) * distance;
-            let moveY = Math.sin(angle) * distance;
-
-            knob.style.transform = `translate(${moveX}px, ${moveY}px)`;
+            knob.style.transform = `translate(${Math.cos(angle)*distance}px, ${Math.sin(angle)*distance}px)`;
             
-            // Movement intensity
-            moveForward = -moveY / 50;
-            moveSide = moveX / 50;
+            // Movement Fixed: Left stick = Left move
+            moveForward = -Math.sin(angle) * (distance / 50);
+            moveSide = Math.cos(angle) * (distance / 50);
         });
 
         base.addEventListener('touchend', () => {
@@ -122,23 +104,23 @@
     function animate() {
         requestAnimationFrame(animate);
 
-        // Rotate Camera
         let phi = THREE.MathUtils.degToRad(90 - lat);
         let theta = THREE.MathUtils.degToRad(lon);
         const target = new THREE.Vector3();
         target.setFromSphericalCoords(1, phi, theta).add(camera.position);
         camera.lookAt(target);
 
-        // Move Player based on camera direction
         if (moveForward !== 0 || moveSide !== 0) {
             const dir = new THREE.Vector3();
             camera.getWorldDirection(dir);
-            dir.y = 0; dir.normalize(); // Walk on floor only
+            dir.y = 0; dir.normalize(); 
             
-            const sideDir = new THREE.Vector3().crossVectors(camera.up, dir).normalize();
+            // Side direction (Right vector)
+            const right = new THREE.Vector3().crossVectors(dir, camera.up).normalize();
             
-            camera.position.addScaledVector(dir, moveForward * 0.1);
-            camera.position.addScaledVector(sideDir, moveSide * 0.1);
+            // Movement logic
+            camera.position.addScaledVector(dir, moveForward * 0.08);
+            camera.position.addScaledVector(right, moveSide * 0.08);
         }
 
         renderer.render(scene, camera);
@@ -148,4 +130,3 @@
 </script>
 </body>
 </html>
-
