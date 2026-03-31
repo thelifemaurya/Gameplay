@@ -1,43 +1,44 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Dead Frequency 3D - Pro Mobile</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Dead Frequency - Optimized 3D</title>
     <style>
-        body { margin: 0; background: #000; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; font-family: monospace; }
+        body { margin: 0; background: #000; overflow: hidden; font-family: 'Courier New', monospace; touch-action: none; }
         
-        /* 16:9 Game Container */
-        #game-wrapper {
-            position: relative;
-            width: 100vw;
-            height: 56.25vw; /* 16:9 Ratio */
-            max-height: 100vh;
-            max-width: 177.78vh;
-            background: #050505;
-            box-shadow: 0 0 50px rgba(0,0,0,1);
-            overflow: hidden;
+        /* Orientation Overlay */
+        #rotate-notice {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; color: white; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 999; text-align: center;
+        }
+        @media (orientation: landscape) { #rotate-notice { display: none; } }
+
+        #game-container {
+            position: relative; width: 100vw; height: 100vh;
+            display: flex; justify-content: center; align-items: center;
         }
 
-        #ui-layer { position: absolute; top: 10px; width: 100%; text-align: center; color: #444; pointer-events: none; z-index: 5; font-size: 12px; }
-        
-        /* Modern Joystick */
+        /* UI Elements */
         #joy-base { 
-            position: absolute; bottom: 15%; left: 8%; 
-            width: 80px; height: 80px; background: rgba(255,255,255,0.03); 
-            border: 1px solid rgba(255,255,255,0.1); border-radius: 50%; touch-action: none;
+            position: absolute; bottom: 40px; left: 40px; 
+            width: 100px; height: 100px; background: rgba(255,255,255,0.05); 
+            border: 1px solid #333; border-radius: 50%; z-index: 10;
         }
         #joy-knob { 
-            position: absolute; top: 20px; left: 20px; 
-            width: 40px; height: 40px; background: rgba(255,255,255,0.2); border-radius: 50%; 
+            position: absolute; top: 25px; left: 25px; 
+            width: 50px; height: 50px; background: #444; border-radius: 50%; 
         }
-
-        canvas { width: 100% !important; height: 100% !important; }
     </style>
 </head>
 <body>
 
-    <div id="game-wrapper">
-        <div id="ui-layer">DEAD FREQUENCY | 16:9 ANDROID BUILD</div>
+    <div id="rotate-notice">
+        <div style="font-size: 24px; margin-bottom: 10px;">🔄 Please Rotate Your Phone</div>
+        <p>Behtar experience ke liye Landscape mode (16:9) use karein.</p>
+    </div>
+
+    <div id="game-container">
         <div id="joy-base"><div id="joy-knob"></div></div>
     </div>
 
@@ -45,33 +46,28 @@
 
 <script>
     let scene, camera, renderer;
-    let lon = 0, lat = 0, touchX, touchY;
-    let moveDir = { x: 0, z: 0 };
+    let yaw = 0, pitch = 0; // Proper Euler Angles for rotation
+    let moveX = 0, moveZ = 0;
+    let lookTouchID = null, moveTouchID = null;
+    let prevLookX, prevLookY;
 
     function init() {
         scene = new THREE.Scene();
         scene.background = new THREE.Color(0x020202);
-        scene.fog = new THREE.Fog(0x000000, 1, 15);
+        scene.fog = new THREE.Fog(0x000000, 1, 20);
 
-        camera = new THREE.PerspectiveCamera(75, 16/9, 0.1, 1000);
+        camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
         camera.position.set(0, 1.6, 0);
 
         renderer = new THREE.WebGLRenderer({ antialias: true });
-        const wrapper = document.getElementById('game-wrapper');
-        renderer.setSize(wrapper.clientWidth, wrapper.clientHeight);
-        wrapper.appendChild(renderer.domElement);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.getElementById('game-container').appendChild(renderer.domElement);
 
-        // Ground with more detail
-        const grid = new THREE.GridHelper(100, 40, 0x111111, 0x222222);
-        scene.add(grid);
-
-        // Ambient Horror Light
-        const ambient = new THREE.AmbientLight(0x404040, 0.5);
-        scene.add(ambient);
-
-        // Player Flashlight
-        const torch = new THREE.PointLight(0xffffff, 1, 8);
-        camera.add(torch);
+        // Grid aur environment
+        scene.add(new THREE.GridHelper(100, 50, 0x222222, 0x111111));
+        const light = new THREE.PointLight(0xffffff, 2, 10);
+        camera.add(light);
         scene.add(camera);
 
         setupControls();
@@ -81,90 +77,89 @@
     function setupControls() {
         const base = document.getElementById('joy-base');
         const knob = document.getElementById('joy-knob');
-        const wrapper = document.getElementById('game-wrapper');
+        const centerX = base.offsetLeft + 50;
+        const centerY = base.offsetTop + 50;
 
-        // RIGHT SIDE LOOK
-        wrapper.addEventListener('touchstart', (e) => {
-            const t = e.touches[0];
-            if(t.clientX > window.innerWidth / 2) {
-                touchX = t.clientX; touchY = t.clientY;
-            }
-        });
-
-        wrapper.addEventListener('touchmove', (e) => {
-            for(let i=0; i<e.touches.length; i++){
-                const t = e.touches[i];
-                if(t.clientX > window.innerWidth / 2) {
-                    let dx = t.clientX - touchX;
-                    let dy = t.clientY - touchY;
-                    lon += dx * 0.2;
-                    lat -= dy * 0.2;
-                    lat = Math.max(-85, Math.min(85, lat));
-                    touchX = t.clientX; touchY = t.clientY;
+        window.addEventListener('touchstart', (e) => {
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                let t = e.changedTouches[i];
+                // Agar touch left side hai (Movement)
+                if (t.clientX < window.innerWidth / 2 && moveTouchID === null) {
+                    moveTouchID = t.identifier;
+                } 
+                // Agar touch right side hai (Look/Rotation)
+                else if (t.clientX >= window.innerWidth / 2 && lookTouchID === null) {
+                    lookTouchID = t.identifier;
+                    prevLookX = t.clientX;
+                    prevLookY = t.clientY;
                 }
             }
-        });
+        }, { passive: false });
 
-        // LEFT SIDE JOYSTICK (Proper Vector Math)
-        base.addEventListener('touchmove', (e) => {
+        window.addEventListener('touchmove', (e) => {
             e.preventDefault();
-            const t = e.touches[0];
-            const rect = base.getBoundingClientRect();
-            const centerX = rect.left + rect.width/2;
-            const centerY = rect.top + rect.height/2;
-            
-            let dx = t.clientX - centerX;
-            let dy = t.clientY - centerY;
-            let dist = Math.min(Math.sqrt(dx*dx + dy*dy), 30);
-            let angle = Math.atan2(dy, dx);
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                let t = e.changedTouches[i];
 
-            knob.style.transform = `translate(${Math.cos(angle)*dist}px, ${Math.sin(angle)*dist}px)`;
-            
-            // Movement intensity
-            moveDir.x = Math.cos(angle) * (dist / 30);
-            moveDir.z = Math.sin(angle) * (dist / 30);
-        });
+                if (t.identifier === moveTouchID) {
+                    let dx = t.clientX - centerX;
+                    let dy = t.clientY - centerY;
+                    let dist = Math.min(Math.sqrt(dx*dx + dy*dy), 40);
+                    let angle = Math.atan2(dy, dx);
+                    knob.style.transform = `translate(${Math.cos(angle)*dist}px, ${Math.sin(angle)*dist}px)`;
+                    moveX = Math.cos(angle) * (dist / 40);
+                    moveZ = Math.sin(angle) * (dist / 40);
+                }
 
-        base.addEventListener('touchend', () => {
-            knob.style.transform = `translate(0px, 0px)`;
-            moveDir = { x: 0, z: 0 };
+                if (t.identifier === lookTouchID) {
+                    let dx = t.clientX - prevLookX;
+                    let dy = t.clientY - prevLookY;
+                    
+                    // SENSITIVITY FIX: Rotation diagonal problem yahan solve hoti hai
+                    yaw -= dx * 0.004; 
+                    pitch -= dy * 0.004;
+                    pitch = Math.max(-Math.PI/2.2, Math.min(Math.PI/2.2, pitch));
+                    
+                    prevLookX = t.clientX;
+                    prevLookY = t.clientY;
+                }
+            }
+        }, { passive: false });
+
+        window.addEventListener('touchend', (e) => {
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                let t = e.changedTouches[i];
+                if (t.identifier === moveTouchID) {
+                    moveTouchID = null; moveX = 0; moveZ = 0;
+                    knob.style.transform = `translate(0px,0px)`;
+                }
+                if (t.identifier === lookTouchID) lookTouchID = null;
+            }
         });
     }
 
     function animate() {
         requestAnimationFrame(animate);
 
-        // Rotation logic
-        let phi = THREE.MathUtils.degToRad(90 - lat);
-        let theta = THREE.MathUtils.degToRad(lon);
-        const target = new THREE.Vector3();
-        target.setFromSphericalCoords(1, phi, theta).add(camera.position);
-        camera.lookAt(target);
+        // Rotation Fix using Euler math
+        const qYaw = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+        const qPitch = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), pitch);
+        camera.quaternion.copy(qYaw).multiply(qPitch);
 
-        // Movement Logic (Fixed Diagonal)
-        if(moveDir.x !== 0 || moveDir.z !== 0) {
-            const forward = new THREE.Vector3();
-            camera.getWorldDirection(forward);
-            forward.y = 0; forward.normalize();
-            
-            const right = new THREE.Vector3();
-            right.crossVectors(forward, camera.up).normalize();
-
-            // Ye formula diagonal movement ko smooth karega
-            const velocity = new THREE.Vector3();
-            velocity.addScaledVector(forward, -moveDir.z * 0.08);
-            velocity.addScaledVector(right, moveDir.x * 0.08);
-            
-            camera.position.add(velocity);
+        // Movement Fix (Diagonal World-Space)
+        if (moveX !== 0 || moveZ !== 0) {
+            const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(qYaw);
+            const right = new THREE.Vector3(1, 0, 0).applyQuaternion(qYaw);
+            camera.position.addScaledVector(forward, -moveZ * 0.1);
+            camera.position.addScaledVector(right, moveX * 0.1);
         }
 
         renderer.render(scene, camera);
     }
 
     window.onresize = () => {
-        const wrapper = document.getElementById('game-wrapper');
-        renderer.setSize(wrapper.clientWidth, wrapper.clientHeight);
-        camera.aspect = 16/9;
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
     };
 
