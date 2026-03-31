@@ -3,26 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Dead Frequency | Final Bedroom</title>
+    <title>Dead Frequency | Fixed Build</title>
     <style>
         body { margin: 0; background: #000; overflow: hidden; font-family: 'Courier New', monospace; touch-action: none; color: white; }
         #start-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #050505; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 1000; }
         #start-btn { padding: 15px 40px; background: transparent; color: #888; border: 1px solid #444; cursor: pointer; font-size: 18px; letter-spacing: 2px; }
-        #rotate-notice { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 999; }
-        @media (orientation: portrait) { #rotate-notice { display: flex; } }
-        #joy-base { position: absolute; bottom: 40px; left: 40px; width: 100px; height: 100px; background: rgba(255,255,255,0.03); border: 1px solid #333; border-radius: 50%; z-index: 20; visibility: hidden; }
-        #joy-knob { position: absolute; top: 25px; left: 25px; width: 50px; height: 50px; background: #333; border-radius: 50%; }
-        #ui-text { position: absolute; top: 20px; width: 100%; text-align: center; color: #444; z-index: 10; font-size: 14px; pointer-events: none; }
+        #joy-base { position: absolute; bottom: 40px; left: 40px; width: 100px; height: 100px; background: rgba(255,255,255,0.05); border: 1px solid #333; border-radius: 50%; z-index: 20; visibility: hidden; }
+        #joy-knob { position: absolute; top: 25px; left: 25px; width: 50px; height: 50px; background: #444; border-radius: 50%; }
+        #ui-text { position: absolute; top: 20px; width: 100%; text-align: center; color: #666; z-index: 10; font-size: 14px; pointer-events: none; }
     </style>
 </head>
 <body>
 
     <div id="start-screen">
-        <h2 style="color:#333; margin-bottom:30px; letter-spacing: 5px;">DEAD FREQUENCY</h2>
+        <h2 style="color:#444; margin-bottom:30px; letter-spacing: 5px;">DEAD FREQUENCY</h2>
         <button id="start-btn">AANKHEIN KHOLO</button>
     </div>
 
-    <div id="rotate-notice"><div>🔄 ROTATE FOR 16:9</div></div>
     <div id="ui-text">Arjun... Meera kitchen mein hai.</div>
 
     <div id="game-container">
@@ -40,38 +37,50 @@
     document.getElementById('start-btn').onclick = function() {
         document.getElementById('start-screen').style.display = 'none';
         document.getElementById('joy-base').style.visibility = 'visible';
+        
+        // Setup Audio Context immediately on click
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+
         initGame();
         playHorrorAmbience();
     };
 
     function initGame() {
         scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x000000);
-        scene.fog = new THREE.Fog(0x000000, 1, 15);
+        scene.background = new THREE.Color(0x050505);
+        scene.fog = new THREE.Fog(0x000000, 1, 18);
 
         camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
         camera.position.set(0, 1.6, 0);
 
         renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(window.devicePixelRatio);
         document.getElementById('game-container').appendChild(renderer.domElement);
 
-        // Room
-        const roomGeo = new THREE.BoxGeometry(20, 8, 20);
-        const roomMat = new THREE.MeshStandardMaterial({ color: 0x1a1510, side: THREE.BackSide });
-        scene.add(new THREE.Mesh(roomGeo, roomMat));
+        // --- WALLS FIX ---
+        // Humne color thoda light kiya hai aur side ko DoubleSide kiya hai taaki wo invisible na rahe
+        const roomGeo = new THREE.BoxGeometry(20, 10, 20);
+        const roomMat = new THREE.MeshStandardMaterial({ 
+            color: 0x222222, 
+            side: THREE.DoubleSide,
+            roughness: 1
+        });
+        const bedroom = new THREE.Mesh(roomGeo, roomMat);
+        scene.add(bedroom);
 
         // Floor Grid
-        scene.add(new THREE.GridHelper(20, 20, 0x222222, 0x111111));
+        const grid = new THREE.GridHelper(20, 20, 0x444444, 0x222222);
+        grid.position.y = -0.05;
+        scene.add(grid);
 
-        // Flashlight
-        const torch = new THREE.SpotLight(0xffffff, 2, 15, Math.PI/6, 0.5);
+        // --- LIGHTING FIX ---
+        scene.add(new THREE.AmbientLight(0xffffff, 0.05)); // Base visibility
+        
+        // Flashlight attached to camera
+        const torch = new THREE.PointLight(0xffffff, 1.5, 12);
         camera.add(torch);
-        camera.add(torch.target);
-        torch.target.position.set(0, 0, -1);
         scene.add(camera);
-        scene.add(new THREE.AmbientLight(0xffffff, 0.02));
 
         setupControls();
         animate();
@@ -105,8 +114,8 @@
                     inputY = Math.sin(angle) * (dist / 40);
                 }
                 if (t.identifier === lookTouchID) {
-                    yaw -= (t.clientX - prevLookX) * 0.004;
-                    pitch -= (t.clientY - prevLookY) * 0.004;
+                    yaw -= (t.clientX - prevLookX) * 0.005;
+                    pitch -= (t.clientY - prevLookY) * 0.005;
                     pitch = Math.max(-1.5, Math.min(1.5, pitch));
                     prevLookX = t.clientX; prevLookY = t.clientY;
                 }
@@ -122,18 +131,27 @@
     }
 
     function playHorrorAmbience() {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        
-        // Geiger Sound (Tik-Tik)
-        setInterval(() => {
-            if(audioCtx.state === 'suspended') audioCtx.resume();
+        // --- TIK TIK FIX ---
+        function triggerTik() {
+            if (!audioCtx) return;
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            
             let osc = audioCtx.createOscillator();
             let gain = audioCtx.createGain();
-            osc.frequency.setValueAtTime(115, audioCtx.currentTime);
-            gain.gain.setValueAtTime(0.01, audioCtx.currentTime);
-            osc.connect(gain); gain.connect(audioCtx.destination);
-            osc.start(); osc.stop(audioCtx.currentTime + 0.01);
-        }, 2800);
+            
+            osc.type = 'square'; // Sharper "tik" sound
+            osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.02, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.02);
+            
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.02);
+        }
+
+        setInterval(triggerTik, 2500);
 
         // Meera's Sequence
         const voices = ['meera_1.mp3', 'meera_2.mp3', 'meera_3.mp3', 'meera_4.mp3'];
@@ -141,8 +159,8 @@
         function playNext() {
             if (current >= voices.length) return;
             const audio = new Audio(voices[current]);
-            audio.play().catch(e => console.log("Audio Error"));
-            audio.onended = () => { current++; setTimeout(playNext, 7000); };
+            audio.play().catch(e => console.log("Audio Error:", voices[current]));
+            audio.onended = () => { current++; setTimeout(playNext, 6000); };
         }
         playNext();
     }
@@ -158,6 +176,8 @@
             const right = new THREE.Vector3(1, 0, 0).applyQuaternion(qYaw);
             let nextX = camera.position.x + (forward.x * -inputY * 0.1) + (right.x * inputX * 0.1);
             let nextZ = camera.position.z + (forward.z * -inputY * 0.1) + (right.z * inputX * 0.1);
+            
+            // Collision logic
             if (Math.abs(nextX) < LIMIT) camera.position.x = nextX;
             if (Math.abs(nextZ) < LIMIT) camera.position.z = nextZ;
         }
